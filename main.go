@@ -2,180 +2,84 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
-	"io/ioutil"
+	"log"
 	"net/http"
-	"net/url"
-	"strings"
-	"time"
 
-	"golang.org/x/net/html"
+	C "./crawler"
 )
 
-func getHref(t html.Token) (href string) {
-	for _, a := range t.Attr {
-		if a.Key == "href" {
-			href = a.Val
-		}
-	}
-	return
+type status struct {
+	Running bool   `json:"running"`
+	Message string `json:"message"`
 }
 
-func getAnchors(tokens *html.Tokenizer) map[string]int {
-	links := make(map[string]int)
-	for {
-		tt := tokens.Next()
-		switch tt {
-		case html.ErrorToken:
-			return links
-		case html.StartTagToken:
-			t := tokens.Token()
-			if t.Data == "a" {
-				href := getHref(t)
-				u, err := url.Parse(href)
-				if err != nil {
-					fmt.Println("Error")
-				}
-				if u.Host == "" || u.Host == "monzo.com" {
-					links[u.Path] = 1
-				}
-			}
-		}
-	}
+type message struct {
+	Message string `json:"message"`
 }
 
-func get(URLString string) (map[string]int, error) {
-	resp, err := http.Get(URLString)
-	if err != nil {
-		fmt.Println("\nNo more links...")
-		return nil, err
-	}
-	b := resp.Body
-	defer b.Close()
-	tokens := html.NewTokenizer(b)
-	anchors := getAnchors(tokens)
-	resp.Body.Close()
-	return anchors, err
+func (s *status) setMessage(message string) {
+	s.Message = message
 }
 
-func calculateGroupID(path string, currentGroupID int, groups map[string]int) (int, int, map[string]int) {
-	u, err := url.Parse(path)
-	if err != nil {
-		panic(err)
-	}
-
-	fistURISegment := "/"
-	uriSegments := strings.Split(u.Path, "/")
-	if len(uriSegments) > 1 {
-		fistURISegment = uriSegments[1]
-	}
-
-	if _, groupExists := groups[fistURISegment]; !groupExists {
-		groups[fistURISegment] = currentGroupID
-		return currentGroupID + 1, currentGroupID, groups
-	} else {
-		return currentGroupID, groups[fistURISegment], groups
-	}
+func (s *status) setRunning(running bool) {
+	s.Running = running
 }
 
-type node struct {
-	ID    string `json:"id"`
-	Group int    `json:"group"`
-}
-type edge struct {
-	Source string `json:"source"`
-	Target string `json:"target"`
-}
-type graph struct {
-	Nodes []node `json:"nodes"`
-	Edges []edge `json:"edges"`
+func (s *status) isRunning() bool {
+	return s.Running
 }
 
 func main() {
-	then := time.Now()
-	URL := "http://www.monzo.com"
-	link := ""
 
-	seenLinks := make(map[string]int)
-	unseenLinks := []string{URL}
+	status := status{false, "The crawler is not running."}
+	channel := make(chan C.Graph)
+	data := C.Graph{}
 
-	nodes := make(map[string]node)
-	edges := []edge{}
-
-	groupCounter := 0
-	groupID := 0
-	groups := make(map[string]int)
-
-	for {
-
-		if len(unseenLinks) == 0 {
-			break
+	http.Handle("/crawl", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if status.isRunning() {
+			status.setMessage("The crawler is already running.")
+		} else {
+			status.setRunning(true)
+			status.setMessage("The crawler is running.")
+			go func() {
+				C.Crawl("http://www.monzo.com", channel)
+			}()
 		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(status)
+	}))
 
-		link, unseenLinks = unseenLinks[0], unseenLinks[1:]
+	http.Handle("/status", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(status)
+	}))
 
-		if !strings.HasPrefix(link, URL) {
-			link = URL + link
+	http.Handle("/data", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case msg := <-channel:
+			data = msg
+		default:
 		}
-		if link[len(link)-1:] == "/" {
-			link = link[:len(link)-1]
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(data)
+	}))
+
+	http.Handle("/export", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case msg := <-channel:
+			data = msg
+		default:
 		}
+		C.ExportGraphJson(data)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(message{"The data has been exported to json."})
+	}))
 
-		groupCounter, groupID, groups = calculateGroupID(link, groupCounter, groups)
+	log.Println("Server is running on port 3000")
+	http.ListenAndServe(":3000", nil)
 
-		fmt.Printf("\ncrawling: %s %d", link, len(unseenLinks))
-
-		_, seen := seenLinks[link]
-		if seen {
-			fmt.Print("  <--- seen")
-			continue
-		}
-
-		seenLinks[link] = 1
-		nodes[link] = node{link, groupID}
-
-		foundLinks, err := get(link)
-		if err != nil {
-			continue
-		}
-
-		fmt.Printf("\nTotal seen links: %d, Total unseen links: %d, Total found links: %d", len(seenLinks), len(unseenLinks), len(foundLinks))
-
-		for foundLink := range foundLinks {
-			if !strings.HasPrefix(foundLink, URL) {
-				foundLink = URL + foundLink
-			}
-
-			groupCounter, groupID, groups = calculateGroupID(foundLink, groupCounter, groups)
-
-			to := node{foundLink, groupID}
-			if _, exists := nodes[to.ID]; !exists {
-				nodes[foundLink] = to
-			}
-			edges = append(edges, edge{link, foundLink})
-
-			_, ok := seenLinks[foundLink]
-			if !ok {
-				unseenLinks = append(unseenLinks, foundLink)
-			}
-		}
-
-		fmt.Printf("\n Total pages: %d Total links: %d", len(nodes), len(edges))
-	}
-
-	fmt.Printf("\n Total Duration %s", time.Since(then))
-
-	nodeList := make([]node, 0, len(nodes))
-
-	for _, value := range nodes {
-		nodeList = append(nodeList, value)
-	}
-
-	jsonString, err := json.Marshal(graph{nodeList, edges})
-	if err != nil {
-		fmt.Println(err)
-	}
-	err = ioutil.WriteFile("sitemap.json", jsonString, 0644)
-
-	fmt.Printf("\n Total pages: %d Total links: %d", len(nodes), len(edges))
 }
