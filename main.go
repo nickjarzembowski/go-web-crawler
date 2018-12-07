@@ -35,6 +35,8 @@ func main() {
 	channel := make(chan C.Graph)
 	data := C.Graph{}
 
+	http.Handle("/", http.FileServer(http.Dir("./static")))
+
 	http.Handle("/crawl", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if status.isRunning() {
 			status.setMessage("The crawler is already running.")
@@ -73,7 +75,7 @@ func main() {
 			data = msg
 		default:
 		}
-		C.ExportGraphJson(data)
+		C.ExportGraphJSON(data)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(message{"The data has been exported to json."})

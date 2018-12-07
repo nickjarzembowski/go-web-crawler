@@ -12,7 +12,8 @@ import (
 	"golang.org/x/net/html"
 )
 
-func getHref(t html.Token) (href string) {
+// extracts href value from html token
+func extractHref(t html.Token) (href string) {
 	for _, a := range t.Attr {
 		if a.Key == "href" {
 			href = a.Val
@@ -21,7 +22,8 @@ func getHref(t html.Token) (href string) {
 	return
 }
 
-func getAnchors(tokens *html.Tokenizer) map[string]int {
+// extracts paths from a tags
+func extractAnchors(tokens *html.Tokenizer) map[string]int {
 	links := make(map[string]int)
 	for {
 		tt := tokens.Next()
@@ -31,7 +33,7 @@ func getAnchors(tokens *html.Tokenizer) map[string]int {
 		case html.StartTagToken:
 			t := tokens.Token()
 			if t.Data == "a" {
-				href := getHref(t)
+				href := extractHref(t)
 				u, err := url.Parse(href)
 				if err != nil {
 					fmt.Println("Error")
@@ -44,7 +46,8 @@ func getAnchors(tokens *html.Tokenizer) map[string]int {
 	}
 }
 
-func get(URLString string) (map[string]int, error) {
+// fetches html and extracts the a paths from all a tags on the page
+func fetchAnchors(URLString string) (map[string]int, error) {
 	resp, err := http.Get(URLString)
 	if err != nil {
 		fmt.Println("\nNo more links...")
@@ -52,12 +55,13 @@ func get(URLString string) (map[string]int, error) {
 	}
 	b := resp.Body
 	defer b.Close()
-	tokens := html.NewTokenizer(b)
-	anchors := getAnchors(tokens)
-	resp.Body.Close()
+	anchors := extractAnchors(html.NewTokenizer(resp.Body))
 	return anchors, err
 }
 
+// computes the group id for the given path
+// all paths are grouped by the first segement of their uri e.g. /blog/2017 is
+// grouped by blog
 func calculateGroupID(path string, currentGroupID int, groups map[string]int) (int, int, map[string]int) {
 	u, err := url.Parse(path)
 	if err != nil {
@@ -78,6 +82,7 @@ func calculateGroupID(path string, currentGroupID int, groups map[string]int) (i
 	}
 }
 
+// addeds url prefix to uri if not present and removes trailing / char
 func formatLink(link string, URL string) string {
 	if !strings.HasPrefix(link, URL) {
 		link = URL + link
@@ -88,17 +93,17 @@ func formatLink(link string, URL string) string {
 	return link
 }
 
+// extracts the nodes from the node map and creates a graph struct
 func createGraph(nodes map[string]node, edges []edge) Graph {
 	nodeList := make([]node, 0, len(nodes))
-
 	for _, value := range nodes {
 		nodeList = append(nodeList, value)
 	}
-
 	return Graph{nodeList, edges}
 }
 
-func ExportGraphJson(graph Graph) {
+// ExportGraphJSON persists the provided graph in json format
+func ExportGraphJSON(graph Graph) {
 	jsonString, err := json.Marshal(graph)
 	if err != nil {
 		fmt.Println(err)
@@ -114,11 +119,15 @@ type edge struct {
 	Source string `json:"source"`
 	Target string `json:"target"`
 }
+
+// Graph contains nodes and edges
 type Graph struct {
 	Nodes []node `json:"nodes"`
 	Edges []edge `json:"edges"`
 }
 
+// Crawl crawls the given URL and extracts the site map
+// does not crawl links outside of the URL
 func Crawl(URL string, channel chan Graph) {
 
 	then := time.Now()
@@ -154,7 +163,7 @@ func Crawl(URL string, channel chan Graph) {
 		seenLinks[link] = 1
 		nodes[link] = node{link, groupID}
 
-		foundLinks, err := get(link)
+		foundLinks, err := fetchAnchors(link)
 		if err != nil {
 			continue
 		}
@@ -180,19 +189,12 @@ func Crawl(URL string, channel chan Graph) {
 			}
 		}
 
-		fmt.Printf("\n Total pages: %d Total links: %d", len(nodes), len(edges))
-
-		nodeList := make([]node, 0, len(nodes))
-
-		for _, value := range nodes {
-			nodeList = append(nodeList, value)
-		}
-		channel <- Graph{nodeList, edges}
+		channel <- createGraph(nodes, edges)
 	}
 
 	fmt.Printf("\n Total Duration %s", time.Since(then))
 
-	ExportGraphJson(createGraph(nodes, edges))
+	ExportGraphJSON(createGraph(nodes, edges))
 
 	fmt.Printf("\n Total pages: %d Total links: %d", len(nodes), len(edges))
 }
