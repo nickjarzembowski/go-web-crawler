@@ -16,4 +16,4 @@ Get the data scraped by the crawler by performing a GET request to `localhost:30
 
 Export the data scraped by the crawler to a JSON file by performing a GET request to `localhost:3000/export`
 
-View the data by visiting the root `localhost:3000/`. Make sure the crawler is running before you do this - data is stored in memory and lost when the server is shut down.
+View the data by visiting the root `localhost:3000/`. Make sure the crawler is running before you do this - data is stored in memory and lost when the server is shut down. Refresh the page to see data scraped since last loaded.
