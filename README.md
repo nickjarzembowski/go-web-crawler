@@ -18,6 +18,10 @@ Export the data scraped by the crawler to a JSON file by performing a GET reques
 
 View the data by visiting the root `localhost:3000/`. Make sure the crawler is running before you do this - data is stored in memory and lost when the server is shut down. Refresh the page to see data scraped since last loaded. Hover over a node to see the uri.
 
+## Testing
+
+To run the link formatter test cd to the crawler folder and run `go test`
+
 ## Notes
 
 The crawler took approximately 7m28s to crawl the entire site

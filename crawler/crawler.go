@@ -83,16 +83,17 @@ func calculateGroupID(path string, currentGroupID int, groups map[string]int) (i
 }
 
 // processing on URIs
-func formatLink(link string, URL string) string {
+func FormatLink(link string, URL string) string {
 	if strings.HasPrefix(link, "..") {
 		link = link[2:]
 	}
 	if strings.HasPrefix(link, ".") {
 		link = link[1:]
 	}
-	if strings.HasPrefix(link, URL) && len(link[len(URL):]) > 1 {
+	if strings.HasPrefix(link, URL) {
 		link = link[len(URL):]
 	}
+
 	if link != URL && len(link) > 1 && link[len(link)-1:] == "/" {
 		link = link[:len(link)-1]
 	}
@@ -166,7 +167,7 @@ func Crawl(URL string) {
 		}
 
 		prior := unseenLinks[0]
-		link, unseenLinks = formatLink(unseenLinks[0], URL), unseenLinks[1:]
+		link, unseenLinks = FormatLink(unseenLinks[0], URL), unseenLinks[1:]
 		groupCounter, groupID, groups = calculateGroupID(link, groupCounter, groups)
 
 		fmt.Printf("\nCrawling: %s %s %d", link, prior, len(unseenLinks))
@@ -188,7 +189,7 @@ func Crawl(URL string) {
 		fmt.Printf("\nTotal seen links: %d, Total unseen links: %d, Total found links: %d", len(seenLinks), len(unseenLinks), len(foundLinks))
 
 		for foundLink := range foundLinks {
-			foundLink = formatLink(foundLink, URL)
+			foundLink = FormatLink(foundLink, URL)
 			groupCounter, groupID, groups = calculateGroupID(foundLink, groupCounter, groups)
 
 			to := node{foundLink, groupID}
