@@ -41,7 +41,10 @@ func main() {
 		} else {
 			status.setRunning(true)
 			status.setMessage("The crawler is running.")
-			go C.Crawl("http://www.monzo.com")
+			go func() {
+				C.Crawl("http://www.monzo.com/")
+				status.setRunning(false)
+			}()
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)

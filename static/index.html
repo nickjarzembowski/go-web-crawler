@@ -37,6 +37,10 @@ d3.json("http://localhost:3000/data", function(error, graph) {
 
   if (error) throw error;
 
+  if (graph.nodes == null) return;
+
+  console.log(graph.nodes.sort(function(a,b) { return a.group - b.group} ))
+
   var link = svg.append("g")
       .attr("class", "links")
     .selectAll("line")
@@ -60,8 +64,6 @@ d3.json("http://localhost:3000/data", function(error, graph) {
 
   var radius = 5
   var site = "http://www.monzo.com"
-
-  console.log(graph.nodes.sort(function(a,b) { return a.group - b.group} ))
     
   var circles = node.append("circle")
       .attr("r", radius)
@@ -70,7 +72,7 @@ d3.json("http://localhost:3000/data", function(error, graph) {
         d3.select(this).attr("r", radius*3)
         var id = d.id
         var removedURL = d.id.replace(site, '')
-        text.text(removedURL.length > 0 ? removedURL : "/")
+        text.text(removedURL)
       })
       .on("mouseout", function(d,i) {
         d3.select(this).attr("r", radius)

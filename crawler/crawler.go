@@ -77,20 +77,33 @@ func calculateGroupID(path string, currentGroupID int, groups map[string]int) (i
 	if _, groupExists := groups[fistURISegment]; !groupExists {
 		groups[fistURISegment] = currentGroupID
 		return currentGroupID + 1, currentGroupID, groups
-	} else {
-		return currentGroupID, groups[fistURISegment], groups
 	}
+
+	return currentGroupID, groups[fistURISegment], groups
 }
 
 // addeds url prefix to uri if not present and removes trailing / char
 func formatLink(link string, URL string) string {
-	if !strings.HasPrefix(link, URL) {
-		link = URL + link
+	if strings.HasPrefix(link, "..") {
+		link = link[2:]
 	}
-	if link[len(link)-1:] == "/" {
+	if strings.HasPrefix(link, ".") {
+		link = link[1:]
+	}
+	if strings.HasPrefix(link, URL) && len(link[len(URL):]) > 1 {
+		link = link[len(URL):]
+	}
+	if link != URL && len(link) > 1 && link[len(link)-1:] == "" {
 		link = link[:len(link)-1]
 	}
-	return link
+	if link == "" {
+		link = "/"
+	}
+	if link[0] != '/' {
+		link = "/" + link
+	}
+
+	return strings.TrimSpace(link)
 }
 
 // extracts the nodes from the node map and creates a graph struct
@@ -126,6 +139,7 @@ type Graph struct {
 	Edges []edge `json:"edges"`
 }
 
+// G Graph built by the crawler
 var G Graph
 
 // Crawl crawls the given URL and extracts the site map
@@ -151,10 +165,11 @@ func Crawl(URL string) {
 			break
 		}
 
+		prior := unseenLinks[0]
 		link, unseenLinks = formatLink(unseenLinks[0], URL), unseenLinks[1:]
 		groupCounter, groupID, groups = calculateGroupID(link, groupCounter, groups)
 
-		fmt.Printf("\nCrawling: %s %d", link, len(unseenLinks))
+		fmt.Printf("\nCrawling: %s %s %d", link, prior, len(unseenLinks))
 
 		_, seen := seenLinks[link]
 		if seen {
@@ -165,7 +180,7 @@ func Crawl(URL string) {
 		seenLinks[link] = 1
 		nodes[link] = node{link, groupID}
 
-		foundLinks, err := fetchAnchors(link)
+		foundLinks, err := fetchAnchors(URL + link)
 		if err != nil {
 			continue
 		}
@@ -173,10 +188,7 @@ func Crawl(URL string) {
 		fmt.Printf("\nTotal seen links: %d, Total unseen links: %d, Total found links: %d", len(seenLinks), len(unseenLinks), len(foundLinks))
 
 		for foundLink := range foundLinks {
-			if !strings.HasPrefix(foundLink, URL) {
-				foundLink = URL + foundLink
-			}
-
+			foundLink = formatLink(foundLink, URL)
 			groupCounter, groupID, groups = calculateGroupID(foundLink, groupCounter, groups)
 
 			to := node{foundLink, groupID}
