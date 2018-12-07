@@ -82,7 +82,7 @@ func calculateGroupID(path string, currentGroupID int, groups map[string]int) (i
 	return currentGroupID, groups[fistURISegment], groups
 }
 
-// addeds url prefix to uri if not present and removes trailing / char
+// processing on URIs
 func formatLink(link string, URL string) string {
 	if strings.HasPrefix(link, "..") {
 		link = link[2:]
@@ -93,13 +93,13 @@ func formatLink(link string, URL string) string {
 	if strings.HasPrefix(link, URL) && len(link[len(URL):]) > 1 {
 		link = link[len(URL):]
 	}
-	if link != URL && len(link) > 1 && link[len(link)-1:] == "" {
+	if link != URL && len(link) > 1 && link[len(link)-1:] == "/" {
 		link = link[:len(link)-1]
 	}
 	if link == "" {
 		link = "/"
 	}
-	if link[0] != '/' {
+	if link != URL && link[0] != '/' {
 		link = "/" + link
 	}
 
