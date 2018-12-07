@@ -32,8 +32,6 @@ func (s *status) isRunning() bool {
 func main() {
 
 	status := status{false, "The crawler is not running."}
-	channel := make(chan C.Graph)
-	data := C.Graph{}
 
 	http.Handle("/", http.FileServer(http.Dir("./static")))
 
@@ -43,9 +41,7 @@ func main() {
 		} else {
 			status.setRunning(true)
 			status.setMessage("The crawler is running.")
-			go func() {
-				C.Crawl("http://www.monzo.com", channel)
-			}()
+			go C.Crawl("http://www.monzo.com")
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -59,23 +55,13 @@ func main() {
 	}))
 
 	http.Handle("/data", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		select {
-		case msg := <-channel:
-			data = msg
-		default:
-		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(data)
+		json.NewEncoder(w).Encode(C.G)
 	}))
 
 	http.Handle("/export", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		select {
-		case msg := <-channel:
-			data = msg
-		default:
-		}
-		C.ExportGraphJSON(data)
+		C.ExportGraphJSON(C.G)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(message{"The data has been exported to json."})

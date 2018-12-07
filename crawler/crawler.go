@@ -126,9 +126,11 @@ type Graph struct {
 	Edges []edge `json:"edges"`
 }
 
+var G Graph
+
 // Crawl crawls the given URL and extracts the site map
 // does not crawl links outside of the URL
-func Crawl(URL string, channel chan Graph) {
+func Crawl(URL string) {
 
 	then := time.Now()
 	link := ""
@@ -189,7 +191,7 @@ func Crawl(URL string, channel chan Graph) {
 			}
 		}
 
-		channel <- createGraph(nodes, edges)
+		G = createGraph(nodes, edges)
 	}
 
 	fmt.Printf("\n Total Duration %s", time.Since(then))
